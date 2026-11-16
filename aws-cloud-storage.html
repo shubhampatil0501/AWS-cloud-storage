@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS S3 File Manager</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        aws: {
+                            orange: '#FF9900',
+                            darkorange: '#EC7211',
+                            blue: '#232F3E',
+                            darkblue: '#161927'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .glass-panel {
+            background: rgba(22, 25, 39, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.2s ease;
+        }
+        .glass-card:hover {
+            border-color: rgba(255, 153, 0, 0.3);
+            transform: translateY(-1px);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-[#0b0f19] text-slate-100 font-sans min-h-screen flex flex-col selection:bg-aws-orange selection:text-white">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- HEADER -->
+    <header class="h-16 glass-panel border-b border-slate-800 px-6 flex items-center justify-between sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-aws-orange to-amber-600 flex items-center justify-center shadow-lg shadow-aws-orange/20">
+                <i data-lucide="cloud" class="w-5 text-white"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base tracking-wide text-white">S3 File Manager</h1>
+                <p class="text-[11px] text-aws-orange font-mono">Bucket: my-storage-bucket-us-east-1</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <div class="relative w-48 sm:w-72">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="searchInput" oninput="handleSearch(this.value)" placeholder="Search files..." class="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-900/60 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-aws-orange transition-all">
+            </div>
+            <button onclick="triggerFileInput()" class="px-4 py-2 bg-aws-orange hover:bg-aws-darkorange text-white text-xs font-semibold rounded-xl shadow-lg shadow-aws-orange/20 transition-all flex items-center gap-2">
+                <i data-lucide="upload" class="w-4"></i> Upload File
+            </button>
+            <input type="file" id="hiddenFileInput" onchange="handleFileSelect(this)" class="hidden">
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+        <!-- STATS & DRAG-DROP UPLOAD BANNER -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Stats Widget -->
+            <div class="glass-panel rounded-2xl p-6 flex flex-col justify-between border border-slate-800">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bucket Storage</span>
+                    <i data-lucide="database" class="w-5 text-aws-orange"></i>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-white" id="stat-total-size">35.2 MB</h3>
+                    <p class="text-xs text-slate-400 mt-1"><span id="stat-file-count">5</span> objects stored in AWS S3</p>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-4">
+                    <div class="bg-aws-orange h-full rounded-full" style="width: 35%;"></div>
+                </div>
+            </div>
+
+            <!-- Drag & Drop Upload Zone -->
+            <div id="drop-zone" class="lg:col-span-2 glass-panel rounded-2xl p-6 border-2 border-dashed border-slate-700 hover:border-aws-orange transition-all flex flex-col items-center justify-center text-center cursor-pointer relative bg-slate-900/30">
+                <input type="file" id="dropFileInput" onchange="handleFileSelect(this)" class="absolute inset-0 opacity-0 cursor-pointer">
+                <div class="w-12 h-12 rounded-2xl bg-aws-orange/10 flex items-center justify-center text-aws-orange mb-2">
+                    <i data-lucide="upload-cloud" class="w-6"></i>
+                </div>
+                <h4 class="text-sm font-semibold text-white">Drag & drop files here, or <span class="text-aws-orange">browse</span></h4>
+                <p class="text-xs text-slate-400 mt-1">Instant upload to Amazon S3 bucket</p>
+            </div>
+        </div>
+
+        <!-- FILES SECTION -->
+        <div class="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="folder" class="w-4 text-aws-orange"></i>
+                    <h3 class="text-sm font-bold text-white">Uploaded Objects</h3>
+                </div>
+                <span class="text-xs text-slate-400" id="file-counter-label">Showing 5 files</span>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase bg-slate-900/40">
+                            <th class="py-3 px-6">Name</th>
+                            <th class="py-3 px-6">Type</th>
+                            <th class="py-3 px-6">Size</th>
+                            <th class="py-3 px-6">Date Uploaded</th>
+                            <th class="py-3 px-6 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="files-table-body" class="divide-y divide-slate-800/60 text-xs text-slate-200">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-800/80">
+        AWS S3 File Manager &bull; Lightweight Cloud Storage Interface
+    </footer>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            lucide.createIcons();
+            renderFiles();
+        });
+
+        // Mock Files State
+        let files = [
+            { id: 1, name: 'architecture_diagram.pdf', type: 'PDF Document', size: '4.2 MB', date: '2025-02-16' },
+            { id: 2, name: 'server_bootstrap.py', type: 'Python Script', size: '124 KB', date: '2025-02-15' },
+            { id: 3, name: 'system_backup_logs.tar.gz', type: 'Archive', size: '24.8 MB', date: '2025-02-14' },
+            { id: 4, name: 'network_topology.png', type: 'Image', size: '5.1 MB', date: '2025-02-12' },
+            { id: 5, name: 'config_settings.json', type: 'JSON', size: '12 KB', date: '2025-02-10' }
+        ];
+
+        let searchQuery = '';
+
+        // Toast Notification
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let color = 'border-emerald-500/30 text-emerald-400';
+            let icon = 'check-circle';
+            if (type === 'error') {
+                color = 'border-red-500/30 text-red-400';
+                icon = 'alert-circle';
+            }
+
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl glass-panel border ${color} shadow-xl text-xs font-semibold animate-in fade-in slide-in-from-bottom-2 duration-300 bg-slate-900/90`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 shrink-0"></i><span>${message}</span>`;
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Render File Table
+        function renderFiles() {
+            const tbody = document.getElementById('files-table-body');
+            const filtered = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+            document.getElementById('file-counter-label').innerText = `Showing ${filtered.length} files`;
+            document.getElementById('stat-file-count').innerText = files.length;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500">No files found.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(file => `
+                <tr class="hover:bg-slate-800/40 transition-all">
+                    <td class="py-3 px-6 flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-aws-orange/10 text-aws-orange flex items-center justify-center shrink-0">
+                            <i data-lucide="file-text" class="w-4"></i>
+                        </div>
+                        <span class="font-medium text-white">${file.name}</span>
+                    </td>
+                    <td class="py-3 px-6 text-slate-400">${file.type}</td>
+                    <td class="py-3 px-6 text-slate-300 font-mono text-[11px]">${file.size}</td>
+                    <td class="py-3 px-6 text-slate-400">${file.date}</td>
+                    <td class="py-3 px-6 text-right space-x-1">
+                        <button onclick="downloadFile('${file.name}')" title="Download" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"><i data-lucide="download" class="w-4"></i></button>
+                        <button onclick="deleteFile(${file.id})" title="Delete" class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-all"><i data-lucide="trash-2" class="w-4"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        // Search Filter
+        function handleSearch(val) {
+            searchQuery = val;
+            renderFiles();
+        }
+
+        // Trigger hidden file input
+        function triggerFileInput() {
+            document.getElementById('hiddenFileInput').click();
+        }
+
+        // Handle File Selection & Upload
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const newFile = {
+                    id: Date.now(),
+                    name: file.name,
+                    type: file.type || 'Unknown Type',
+                    size: (file.size / (1024*1024)).toFixed(2) + ' MB',
+                    date: new Date().toISOString().split('T')[0]
+                };
+                files.unshift(newFile);
+                renderFiles();
+                showToast(`Successfully uploaded ${file.name} to S3!`, 'success');
+                input.value = '';
+            }
+        }
+
+        // Download simulation
+        function downloadFile(filename) {
+            showToast(`Downloading ${filename} from S3 bucket...`, 'success');
+        }
+
+        // Delete file
+        function deleteFile(id) {
+            files = files.filter(f => f.id !== id);
+            renderFiles();
+            showToast('File deleted successfully.', 'error');
+        }
+    </script>
+</body>
+</html>
